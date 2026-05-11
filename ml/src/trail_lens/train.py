@@ -1,13 +1,11 @@
 from pathlib import Path
-from typing import Any
 
 import torch
-from torch import nn
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
 from trail_lens.dataset import TrailLensDataset
-from trail_lens.split import train_val_split
+from trail_lens.split import TrailLensDataSubset, train_val_split
 
 # note this is still pretty much copy and paste from pytorch tutorial.
 
@@ -69,30 +67,48 @@ def test(dataloader, model, loss_fn):
 def main() -> None:
     dataset = TrailLensDataset(
         image_dir=Path("data/raw_candidates"),
-        transform=v2.Compose(
-            [
-                v2.Resize(size=(224, 224), antialias=True),
-                v2.RandomHorizontalFlip(p=0.5),
-                v2.RandomRotation(degrees=10),
-                # v2.ColorJitter(
-                #     brightness=0.1,
-                #     contrast=0.1,
-                #     saturation=0.1,
-                #     hue=0.02,
-                # ),
-                v2.ToImage(),
-                v2.ToDtype(torch.float32, scale=True),
-                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ]
-        ),
     )
 
-    training_data, validation_data = train_val_split(dataset, 0.4, 42)
+    validation_transform = v2.Compose(
+        [
+            v2.Resize(size=(224, 224), antialias=True),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
+    training_transform = v2.Compose(
+        [
+            v2.Resize(size=(224, 224), antialias=True),
+            v2.ToImage(),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomRotation(degrees=10),  # ty:ignore[invalid-argument-type]
+            # v2.ColorJitter(
+            #     brightness=0.1,
+            #     contrast=0.1,
+            #     saturation=0.1,
+            #     hue=0.02,
+            # ),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
+
+    training_indexes, validation_indexes = train_val_split(dataset, 0.4, 42)
 
     batch_size = 64
 
-    train_dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
-    test_dataloader = DataLoader(validation_data, batch_size=batch_size, shuffle=False)
+    train_dataloader = DataLoader(
+        TrailLensDataSubset(dataset, training_indexes, training_transform),
+        batch_size=batch_size,
+        shuffle=True,
+    )
+    test_dataloader = DataLoader(
+        TrailLensDataSubset(dataset, validation_indexes, validation_transform),
+        batch_size=batch_size,
+        shuffle=False,
+    )
 
     for X, y in test_dataloader:
         print(f"Shape of X [N, C, H, W]: {X.shape}")
