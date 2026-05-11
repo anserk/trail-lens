@@ -356,7 +356,30 @@ Done!
 | `224x224`  |               40.7% |                  35.2% |    1.855 |
 
 
+## Mind the gap
 
+The gap between:
+
+How good is the model at memorizing training data
+(train accuracy)
+
+vs
+
+How good is it at handling new unseen data
+(validation/test accuracy)
+
+The gap between fitting ability (train accuracy)
+and generalization ability (validation/test accuracy).
+
+
+| State | Train Accuracy | Validation/Test Accuracy | Gap | Interpretation |
+|---|---|---|---|---|
+| Underfitting | Low | Low | Small | Model cannot learn the training data well |
+| Healthy fitting | High | High | Small / Moderate | Model generalizes well to unseen data |
+| Overfitting | Very High | Lower | Large | Model memorizes training-specific information |
+
+
+## Explore
 - add more epochs to training
 - add augmentation
   - random horizontal flip
