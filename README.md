@@ -23,3 +23,13 @@ Future goals include:
 
 This is pretty much the goal. 
 This is a learning project and I'll try to document it.
+
+
+---
+
+### AI disclaimer
+AI it used in this project as a companion for learning, brainstorming, summarization (such as training run summaries) and exploring new ideas.
+
+ AI generated responses may have been used similarly to how developers use search engines, documentation, forums: as a suggestion, not as a replacement for understanding.
+
+All architecture, implementation decisions, debugging, and final code review were done manually.
