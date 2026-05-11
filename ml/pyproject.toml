@@ -1,0 +1,65 @@
+[project]
+name = "trail-lens"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "simone rotondi", email = "simone.rotondi@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.10.9",
+    "numpy>=2.4.4",
+    "onnx>=1.21.0",
+    "onnxruntime>=1.25.1",
+    "pandas>=3.0.2",
+    "pillow>=12.2.0",
+    "scikit-learn>=1.8.0",
+    "torch>=2.11.0",
+    "torchvision>=0.26.0",
+    "tqdm>=4.67.3",
+]
+
+[project.scripts]
+trail-lens = "trail_lens:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ddgs>=9.14.2",
+    "pillow>=12.2.0",
+    "pytest>=9.0.3",
+    "requests>=2.33.1",
+    "ruff>=0.15.12",
+    "ty>=0.0.34",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "ANN",
+]
+
+
+ignore = [
+    "ANN401",
+]
+
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty]
+environment.root = ["./src"]
