@@ -71,7 +71,7 @@ def main() -> None:
         image_dir=Path("data/raw_candidates"),
         transform=v2.Compose(
             [
-                v2.Resize(size=(128, 128), antialias=True),
+                v2.Resize(size=(224, 224), antialias=True),
                 v2.ToImage(),
                 v2.ToDtype(torch.float32, scale=True),
             ]
@@ -105,7 +105,7 @@ def main() -> None:
             self.conv1 = nn.Conv2d(3, 6, 5)
             self.pool = nn.MaxPool2d(2, 2)
             self.conv2 = nn.Conv2d(6, 16, 5)
-            self.fc1 = nn.Linear(16 * 29 * 29, 120)
+            self.fc1 = nn.Linear(16 * 53 * 53, 120)
             self.fc2 = nn.Linear(120, 84)
             self.fc3 = nn.Linear(84, 10)
 
@@ -124,7 +124,7 @@ def main() -> None:
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-    epochs = 5
+    epochs = 10
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train(train_dataloader, model, loss_fn, optimizer)
