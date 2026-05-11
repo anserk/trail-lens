@@ -72,8 +72,17 @@ def main() -> None:
         transform=v2.Compose(
             [
                 v2.Resize(size=(224, 224), antialias=True),
+                v2.RandomHorizontalFlip(p=0.5),
+                v2.RandomRotation(degrees=10),
+                # v2.ColorJitter(
+                #     brightness=0.1,
+                #     contrast=0.1,
+                #     saturation=0.1,
+                #     hue=0.02,
+                # ),
                 v2.ToImage(),
                 v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ]
         ),
     )
@@ -124,7 +133,7 @@ def main() -> None:
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
-    epochs = 10
+    epochs = 20
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train(train_dataloader, model, loss_fn, optimizer)
