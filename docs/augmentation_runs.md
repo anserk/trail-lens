@@ -888,3 +888,57 @@ Another way to put it:
 |---|---|---|
 | Confusion matrix | "What kinds of mistakes happen repeatedly?" | Repeated class-level mistake patterns |
 | Wrong prediction inspection | "Why did this specific prediction fail?" | Root cause analysis of individual failures |
+
+- At some point save config and params for the model run
+
+  ```python
+  config = {
+    "image_size": 224,
+    "horizontal_flip": True,
+      "conv1": {
+        "in_channels": 3,
+        "out_channels": 6,
+        "kernel_size": 5,
+    },
+    "conv2": {
+        "in_channels": 6,
+        "out_channels": 16,
+        "kernel_size": 5,
+    },
+  }
+
+  transforms = v2.Compose([
+    v2.Resize((config["image_size"], config["image_size"])),
+    v2.RandomHorizontalFlip() if config["horizontal_flip"] else v2.Identity(),
+  ])
+
+  self.conv1 = nn.Conv2d(
+    config["conv1"]["in_channels"],
+    config["conv1"]["out_channels"],
+    config["conv1"]["kernel_size"],
+  )
+
+  self.conv2 = nn.Conv2d(
+      config["conv2"]["in_channels"],
+      config["conv2"]["out_channels"],
+      config["conv2"]["kernel_size"],
+  )
+
+  "training": {
+      "epochs": 20,
+      "batch_size": 64,
+      "learning_rate": 0.001,
+      "optimizer": "SGD",
+      "loss_function": "CrossEntropyLoss",
+  },
+
+  ```
+
+  now I can save the config, and it should tells me what transform were applied.
+
+  Keeping track of all the params can be tricky, that is why products like
+  - TensorBoard
+  - Weights & Biases
+  - MLflow
+
+  exists!

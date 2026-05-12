@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import torch
@@ -62,6 +63,7 @@ def test(dataloader, model, loss_fn):
     test_loss /= num_batches
     correct /= size
     print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    return correct, test_loss
 
 
 def main() -> None:
@@ -150,10 +152,34 @@ def main() -> None:
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
     epochs = 20
+
+    best_accuracy = 0
+    best_model_path: Path | None = None
+
+    best_loss = float("inf")
+    best_loss_path: Path | None = None
+
+    model_path = Path("models") / datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_path.mkdir(parents=True, exist_ok=True)
+
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train(train_dataloader, model, loss_fn, optimizer)
-        test(test_dataloader, model, loss_fn)
+        current_accuracy, current_loss = test(test_dataloader, model, loss_fn)
+        if current_accuracy > best_accuracy:
+            best_accuracy = current_accuracy
+            current_model_path = model_path / f"model_weights_{t + 1}_best_accuracy.pth"
+            torch.save(model.state_dict(), current_model_path)
+            if best_model_path is not None:
+                best_model_path.unlink()
+            best_model_path = current_model_path
+        if current_loss < best_loss:
+            best_loss = current_loss
+            current_model_path = model_path / f"model_weights_{t + 1}_best_loss.pth"
+            torch.save(model.state_dict(), current_model_path)
+            if best_loss_path is not None:
+                best_loss_path.unlink()
+            best_loss_path = current_model_path
 
     print("Done!")
 
