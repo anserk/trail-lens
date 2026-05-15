@@ -2,10 +2,14 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
+import torch.nn as nn
+from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
+from trail_lens.classes import IDX_TO_CLASS
 from trail_lens.dataset import TrailLensDataset
+from trail_lens.model import NeuralNetwork
 from trail_lens.split import TrailLensDataSubset, train_val_split
 
 # note this is still pretty much copy and paste from pytorch tutorial.
@@ -15,8 +19,10 @@ device = accelerator.type if accelerator is not None else "cpu"
 print(f"Using {device} device")
 
 
-def train(dataloader, model, loss_fn, optimizer):
-    size = len(dataloader.dataset)
+def train(
+    dataloader: DataLoader, model: nn.Module, loss_fn: nn.Module, optimizer: Optimizer
+) -> None:
+    size = len(dataloader.dataset)  # ty:ignore[invalid-argument-type]
     num_batches = len(dataloader)
 
     model.train()
@@ -49,8 +55,8 @@ def train(dataloader, model, loss_fn, optimizer):
     print(f"Train Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {train_loss:>8f} \n")
 
 
-def test(dataloader, model, loss_fn):
-    size = len(dataloader.dataset)
+def validate(dataloader: DataLoader, model: nn.Module, loss_fn: nn.Module) -> tuple[float, float]:
+    size = len(dataloader.dataset)  # ty:ignore[invalid-argument-type]
     num_batches = len(dataloader)
     model.eval()
     test_loss, correct = 0, 0
@@ -62,7 +68,7 @@ def test(dataloader, model, loss_fn):
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
     test_loss /= num_batches
     correct /= size
-    print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    print(f"Validation Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     return correct, test_loss
 
 
@@ -106,44 +112,42 @@ def main() -> None:
         batch_size=batch_size,
         shuffle=True,
     )
-    test_dataloader = DataLoader(
+    val_dataloader = DataLoader(
         TrailLensDataSubset(dataset, validation_indexes, validation_transform),
         batch_size=batch_size,
         shuffle=False,
     )
 
-    for X, y in test_dataloader:
+    for X, y in val_dataloader:
         print(f"Shape of X [N, C, H, W]: {X.shape}")
         print(f"Shape of y: {y.shape} {y.dtype}")
+        print(f"Len of val_dataloader: {len(val_dataloader.dataset)}")  # ty:ignore[invalid-argument-type]
+        print(val_dataloader.dataset[0][1])
         break
 
     for X, y in train_dataloader:
         print(f"Shape of X [N, C, H, W]: {X.shape}")
         print(f"Shape of y: {y.shape} {y.dtype}")
+        print(f"Len of train_dataloader: {len(train_dataloader.dataset)}")  # ty:ignore[invalid-argument-type]
         break
 
-    # Define model
-    import torch.nn as nn
-    import torch.nn.functional as F
+    # from collections import Counter
 
-    class NeuralNetwork(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.conv1 = nn.Conv2d(3, 6, 5)
-            self.pool = nn.MaxPool2d(2, 2)
-            self.conv2 = nn.Conv2d(6, 16, 5)
-            self.fc1 = nn.Linear(16 * 53 * 53, 120)
-            self.fc2 = nn.Linear(120, 84)
-            self.fc3 = nn.Linear(84, 10)
+    # def print_class_distribution(name: str, counts: dict[int, int], total: int) -> None:
+    #     print(f"--- {name} ---")
+    #     for cls_id in sorted(counts):
+    #         count = counts[cls_id]
+    #         print(IDX_TO_CLASS[cls_id], count, f"{(count * 100 / total):>0.1f}%")
 
-        def forward(self, x):
-            x = self.pool(F.relu(self.conv1(x)))
-            x = self.pool(F.relu(self.conv2(x)))
-            x = torch.flatten(x, 1)  # flatten all dimensions except batch
-            x = F.relu(self.fc1(x))
-            x = F.relu(self.fc2(x))
-            x = self.fc3(x)
-            return x
+    # val_class_count: Counter[Any] = Counter(
+    #     dataset.image_labels[i]["label_id"] for i in validation_indexes
+    # )
+    # train_class_count: Counter[Any] = Counter(
+    #     dataset.image_labels[i]["label_id"] for i in training_indexes
+    # )
+
+    # print_class_distribution("validation", val_class_count, len(validation_indexes))
+    # print_class_distribution("train", train_class_count, len(training_indexes))
 
     model = NeuralNetwork().to(device)
     print(model)
@@ -165,7 +169,7 @@ def main() -> None:
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train(train_dataloader, model, loss_fn, optimizer)
-        current_accuracy, current_loss = test(test_dataloader, model, loss_fn)
+        current_accuracy, current_loss = validate(val_dataloader, model, loss_fn)
         if current_accuracy > best_accuracy:
             best_accuracy = current_accuracy
             current_model_path = model_path / f"model_weights_{t + 1}_best_accuracy.pth"
