@@ -1,6 +1,8 @@
+import { preprocessImage } from "@/utilities/image";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { Asset } from "expo-asset";
 import {
   CameraMode,
   CameraType,
@@ -8,8 +10,34 @@ import {
   useCameraPermissions,
 } from "expo-camera";
 import { Image } from "expo-image";
-import { useRef, useState } from "react";
+import {
+  InferenceSession
+} from "onnxruntime-react-native";
+import { useEffect, useRef, useState } from "react";
 import { Button, Pressable, StyleSheet, Text, View } from "react-native";
+import modelPath from "../../assets/model.onnx";
+
+const CLASS_NAMES = [
+  "poison ivy",
+  "virginia creeper",
+  "red maple",
+  "white oak",
+  "tulip poplar",
+  "loblolly pine",
+  "eastern red cedar",
+  "american holly",
+  "flowering dogwood",
+  "black cherry",
+]
+
+function softmax(values: number[]) {
+  const max = Math.max(...values);
+
+  const exps = values.map((v) => Math.exp(v - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+
+  return exps.map((v) => v / sum);
+}
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -17,7 +45,29 @@ export default function App() {
   const [uri, setUri] = useState<string | null>(null);
   const [mode, setMode] = useState<CameraMode>("picture");
   const [facing, setFacing] = useState<CameraType>("back");
-  const [recording, setRecording] = useState(false);
+  // const [recording, setRecording] = useState(false);
+  const [className, setClassName] = useState<null | string>(null);
+  const [classNameProb, setClassNameProb] = useState<null | number>(null)
+
+  const [session, setSession] =
+    useState<InferenceSession | null>(null);
+
+  useEffect(() => {
+    async function loadModel() {
+      const asset = Asset.fromModule(modelPath);
+
+      await asset.downloadAsync();
+
+      const loadedSession =
+        await InferenceSession.create(
+          asset.localUri ?? asset.uri
+        );
+
+      setSession(loadedSession);
+    }
+
+    loadModel().catch(console.error);
+  }, []);
 
   if (!permission) {
     return null;
@@ -36,19 +86,42 @@ export default function App() {
 
   const takePicture = async () => {
     const photo = await ref.current?.takePictureAsync();
+    setClassName(null)
+    setClassNameProb(null)
+
+    if (session !== null && photo != null) {
+      const inputTensor = await preprocessImage(photo.uri);
+
+      const results = await session.run({
+        x: inputTensor,
+      });
+
+      const output = results["linear_2"];
+      const logits = Array.from(output.data as Float32Array);
+
+      const probabilities = softmax(logits);
+
+      const predictedIndex = probabilities.indexOf(Math.max(...probabilities));
+      const confidence = probabilities[predictedIndex];
+      const className = CLASS_NAMES[predictedIndex]
+      setClassName(className)
+      setClassNameProb(confidence)
+
+    }
+
     if (photo?.uri) setUri(photo.uri);
   };
 
-  const recordVideo = async () => {
-    if (recording) {
-      setRecording(false);
-      ref.current?.stopRecording();
-      return;
-    }
-    setRecording(true);
-    const video = await ref.current?.recordAsync();
-    console.log({ video });
-  };
+  // const recordVideo = async () => {
+  //   if (recording) {
+  //     setRecording(false);
+  //     ref.current?.stopRecording();
+  //     return;
+  //   }
+  //   setRecording(true);
+  //   const video = await ref.current?.recordAsync();
+  //   console.log({ video });
+  // };
 
   const toggleMode = () => {
     setMode((prev) => (prev === "picture" ? "video" : "picture"));
@@ -70,6 +143,8 @@ export default function App() {
           <Pressable onPress={() => setUri(null)}>
             <FontAwesome6 name="rotate-left" size={32} color="white" />
           </Pressable>
+          {className && classNameProb &&
+            <Text>{className}-{(classNameProb * 100).toFixed(2)}%</Text>}
         </View>
       </View>
     );
@@ -94,7 +169,8 @@ export default function App() {
               <Feather name="video" size={32} color="white" />
             )}
           </Pressable>
-          <Pressable onPress={mode === "picture" ? takePicture : recordVideo}>
+          {/* onPress={mode === "picture" ? takePicture : recordVideo} */}
+          <Pressable onPress={takePicture}>
             {({ pressed }) => (
               <View
                 style={[
