@@ -81,5 +81,5 @@ export const preprocessImage = async (uri: string) => {
     }
   }
 
-  return new Tensor("float32", floatData, [1, 3, width, height]);
+  return new Tensor("float32", floatData, [1, 3, height, width]);
 };
