@@ -1,3 +1,5 @@
+import argparse
+import contextlib
 from datetime import datetime
 from pathlib import Path
 
@@ -7,7 +9,7 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torchvision.transforms import v2
 
-from trail_lens.classes import IDX_TO_CLASS
+# from trail_lens.classes import IDX_TO_CLASS
 from trail_lens.dataset import TrailLensDataset
 from trail_lens.model import NeuralNetwork
 from trail_lens.split import TrailLensDataSubset, train_val_split
@@ -72,7 +74,58 @@ def validate(dataloader: DataLoader, model: nn.Module, loss_fn: nn.Module) -> tu
     return correct, test_loss
 
 
-def main() -> None:
+def checkpoint(
+    model: nn.Module,
+    filename: Path,
+    optimizer: Optimizer,
+    best_accuracy: int | float,
+    best_loss: float,
+    best_accuracy_path: str | None,
+    best_loss_path: str | None,
+    model_path: str,
+    epoch: int,
+) -> None:
+    """
+    This saves a checkpoint for a train run.
+    Existing checkpoints are overwritten.
+    """
+    torch.save(
+        {
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "best_accuracy": best_accuracy,
+            "best_loss": best_loss,
+            "best_accuracy_path": best_accuracy_path,
+            "best_loss_path": best_loss_path,
+            "model_path": model_path,
+            "epoch": epoch,
+        },
+        filename,
+    )
+
+
+def resume(
+    model: nn.Module, filename: Path, optimizer: Optimizer
+) -> tuple[int | float, float, Path | None, Path | None, Path, int]:
+    state_dict = torch.load(filename, map_location=device)
+    model.load_state_dict(state_dict["model"])
+    optimizer.load_state_dict(state_dict["optimizer"])
+    return (
+        state_dict["best_accuracy"],
+        state_dict["best_loss"],
+        Path(state_dict["best_accuracy_path"]) if state_dict["best_accuracy_path"] else None,
+        Path(state_dict["best_loss_path"]) if state_dict["best_loss_path"] else None,
+        Path(state_dict["model_path"]),
+        state_dict["epoch"] + 1,
+    )
+
+
+def safe_unlink(filename: Path) -> None:
+    with contextlib.suppress(FileNotFoundError):
+        filename.unlink()
+
+
+def main(should_resume: bool) -> None:
     dataset = TrailLensDataset(
         image_dir=Path("data/raw_candidates"),
     )
@@ -155,6 +208,7 @@ def main() -> None:
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
+    start_epoch = 0
     epochs = 20
 
     best_accuracy = 0
@@ -163,30 +217,64 @@ def main() -> None:
     best_loss = float("inf")
     best_loss_path: Path | None = None
 
+    model_checkpoints_path = Path("models")
+    model_checkpoints_path.mkdir(parents=True, exist_ok=True)
+
     model_path = Path("models") / datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if should_resume:
+        if (model_checkpoints_path / "checkpoint.pth").exists():
+            best_accuracy, best_loss, best_model_path, best_loss_path, model_path, start_epoch = (
+                resume(model, model_checkpoints_path / "checkpoint.pth", optimizer)
+            )
+        else:
+            raise FileNotFoundError("Unable to resume training, checkpoint not found.")
+
     model_path.mkdir(parents=True, exist_ok=True)
 
-    for t in range(epochs):
+    for t in range(start_epoch, epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train(train_dataloader, model, loss_fn, optimizer)
         current_accuracy, current_loss = validate(val_dataloader, model, loss_fn)
+
         if current_accuracy > best_accuracy:
             best_accuracy = current_accuracy
             current_model_path = model_path / f"model_weights_{t + 1}_best_accuracy.pth"
             torch.save(model.state_dict(), current_model_path)
             if best_model_path is not None:
-                best_model_path.unlink()
+                safe_unlink(best_model_path)
             best_model_path = current_model_path
         if current_loss < best_loss:
             best_loss = current_loss
             current_model_path = model_path / f"model_weights_{t + 1}_best_loss.pth"
             torch.save(model.state_dict(), current_model_path)
             if best_loss_path is not None:
-                best_loss_path.unlink()
+                safe_unlink(best_loss_path)
             best_loss_path = current_model_path
+
+        checkpoint(
+            model,
+            filename=model_checkpoints_path / "checkpoint.pth",
+            optimizer=optimizer,
+            best_accuracy=best_accuracy,
+            best_loss=best_loss,
+            best_accuracy_path=str(best_model_path) if best_model_path else None,
+            best_loss_path=str(best_loss_path) if best_loss_path else None,
+            model_path=str(model_path),
+            epoch=t,
+        )
 
     print("Done!")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        prog="Trail-lens training loop",
+        description="Train a new model given the current image dataset and classes",
+    )
+
+    parser.add_argument("--resume", help="resume existing training", action="store_true")
+
+    args = parser.parse_args()
+
+    main(should_resume=args.resume)
