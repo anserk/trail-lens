@@ -84,6 +84,7 @@ def checkpoint(
     best_loss_path: str | None,
     model_path: str,
     epoch: int,
+    counter: int,
 ) -> None:
     """
     This saves a checkpoint for a train run.
@@ -99,6 +100,7 @@ def checkpoint(
             "best_loss_path": best_loss_path,
             "model_path": model_path,
             "epoch": epoch,
+            "counter": counter,
         },
         filename,
     )
@@ -106,7 +108,7 @@ def checkpoint(
 
 def resume(
     model: nn.Module, filename: Path, optimizer: Optimizer
-) -> tuple[int | float, float, Path | None, Path | None, Path, int]:
+) -> tuple[int | float, float, Path | None, Path | None, Path, int, int]:
     state_dict = torch.load(filename, map_location=device)
     model.load_state_dict(state_dict["model"])
     optimizer.load_state_dict(state_dict["optimizer"])
@@ -117,6 +119,7 @@ def resume(
         Path(state_dict["best_loss_path"]) if state_dict["best_loss_path"] else None,
         Path(state_dict["model_path"]),
         state_dict["epoch"] + 1,
+        state_dict["counter"],
     )
 
 
@@ -217,6 +220,10 @@ def main(should_resume: bool) -> None:
     best_loss = float("inf")
     best_loss_path: Path | None = None
 
+    patience = 5
+    counter = 0
+    min_delta = 0.001
+
     model_checkpoints_path = Path("models")
     model_checkpoints_path.mkdir(parents=True, exist_ok=True)
 
@@ -224,9 +231,15 @@ def main(should_resume: bool) -> None:
 
     if should_resume:
         if (model_checkpoints_path / "checkpoint.pth").exists():
-            best_accuracy, best_loss, best_model_path, best_loss_path, model_path, start_epoch = (
-                resume(model, model_checkpoints_path / "checkpoint.pth", optimizer)
-            )
+            (
+                best_accuracy,
+                best_loss,
+                best_model_path,
+                best_loss_path,
+                model_path,
+                start_epoch,
+                counter,
+            ) = resume(model, model_checkpoints_path / "checkpoint.pth", optimizer)
         else:
             raise FileNotFoundError("Unable to resume training, checkpoint not found.")
 
@@ -244,13 +257,19 @@ def main(should_resume: bool) -> None:
             if best_model_path is not None:
                 safe_unlink(best_model_path)
             best_model_path = current_model_path
-        if current_loss < best_loss:
+        if current_loss < best_loss - min_delta:
             best_loss = current_loss
+            counter = 0
+
             current_model_path = model_path / f"model_weights_{t + 1}_best_loss.pth"
             torch.save(model.state_dict(), current_model_path)
+
             if best_loss_path is not None:
                 safe_unlink(best_loss_path)
+
             best_loss_path = current_model_path
+        else:
+            counter += 1
 
         checkpoint(
             model,
@@ -262,7 +281,12 @@ def main(should_resume: bool) -> None:
             best_loss_path=str(best_loss_path) if best_loss_path else None,
             model_path=str(model_path),
             epoch=t,
+            counter=counter,
         )
+
+        if counter >= patience:
+            print(f"Early stopping after {t + 1} epochs")
+            break
 
     print("Done!")
 
