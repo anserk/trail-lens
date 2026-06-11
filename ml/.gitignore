@@ -13,3 +13,7 @@ wheels/
 data
 models
 *onnx
+
+.coverage
+htmlcov/
+coverage.xml

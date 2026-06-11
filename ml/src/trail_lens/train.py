@@ -12,7 +12,7 @@ from torchvision.transforms import v2
 # from trail_lens.classes import IDX_TO_CLASS
 from trail_lens.dataset import TrailLensDataset
 from trail_lens.model import NeuralNetwork
-from trail_lens.split import TrailLensDataSubset, train_val_split
+from trail_lens.split import TrailLensDataSubset, make_splits
 
 # note this is still pretty much copy and paste from pytorch tutorial.
 
@@ -61,17 +61,17 @@ def validate(dataloader: DataLoader, model: nn.Module, loss_fn: nn.Module) -> tu
     size = len(dataloader.dataset)  # ty:ignore[invalid-argument-type]
     num_batches = len(dataloader)
     model.eval()
-    test_loss, correct = 0, 0
+    val_loss, correct = 0, 0
     with torch.no_grad():
         for X, y in dataloader:
             X, y = X.to(device), y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+            val_loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
-    test_loss /= num_batches
+    val_loss /= num_batches
     correct /= size
-    print(f"Validation Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
-    return correct, test_loss
+    print(f"Validation Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {val_loss:>8f} \n")
+    return correct, val_loss
 
 
 def checkpoint(
@@ -159,17 +159,17 @@ def main(should_resume: bool) -> None:
         ]
     )
 
-    training_indexes, validation_indexes = train_val_split(dataset, 0.4, 42)
+    indexes_split = make_splits(dataset, val_fraction=0.2, test_fraction=0.2, seed=42)
 
     batch_size = 64
 
     train_dataloader = DataLoader(
-        TrailLensDataSubset(dataset, training_indexes, training_transform),
+        TrailLensDataSubset(dataset, indexes_split.train, training_transform),
         batch_size=batch_size,
         shuffle=True,
     )
     val_dataloader = DataLoader(
-        TrailLensDataSubset(dataset, validation_indexes, validation_transform),
+        TrailLensDataSubset(dataset, indexes_split.val, validation_transform),
         batch_size=batch_size,
         shuffle=False,
     )
